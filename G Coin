@@ -1,0 +1,69 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+
+contract Gcoin is ERC20 {
+    using EnumerableSet for EnumerableSet.UintSet;
+
+    address public owner;
+    string private _tokenLogoIPFSHash;
+
+    // Contract addresses of the existing NFT collections
+    address[] private _nftCollections;
+
+    // Mapping from NFT contract address to token ID set
+    mapping(address => EnumerableSet.UintSet) private _nftTokenIds;
+
+    uint256 public constant TOTAL_SUPPLY = 7_000_000 * 10**18; // Total supply: 7 million tokens
+    uint256 public constant FOUNDER_SUPPLY = 100_000 * 10**18; // Founder supply: 100,000 tokens
+
+    constructor(string memory tokenLogoIPFSHash) ERC20("G Coin", "DEFI") {
+        owner = msg.sender;
+        _tokenLogoIPFSHash = tokenLogoIPFSHash;
+        _mint(address(this), TOTAL_SUPPLY - FOUNDER_SUPPLY); // Mint initial tokens to contract wallet
+        _mint(owner, FOUNDER_SUPPLY); // Mint initial tokens to owner
+    }
+
+    // Function to get the token logo IPFS hash
+    function getTokenLogoIPFSHash() public view returns (string memory) {
+        return _tokenLogoIPFSHash;
+    }
+
+    // Mint NFT
+    function mintNFT(address nftContract, address to, uint256 tokenId) external returns (bool) {
+        require(isNFTCollection(nftContract), "Not a valid NFT collection");
+        require(!_nftTokenIds[nftContract].contains(tokenId), "Token ID already exists");
+
+        IERC721(nftContract).safeTransferFrom(address(this), to, tokenId);
+        _nftTokenIds[nftContract].add(tokenId);
+        return true;
+    }
+
+    // Function to add a new NFT collection contract address
+    function addNFTCollection(address nftCollection) external {
+        require(msg.sender == owner, "Only the owner can add NFT collections");
+        _nftCollections.push(nftCollection);
+    }
+
+    // Internal function to check if an address is an NFT collection contract
+    function isNFTCollection(address nftContract) internal view returns (bool) {
+        for (uint256 i = 0; i < _nftCollections.length; i++) {
+            if (_nftCollections[i] == nftContract) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Override transfer function to ensure tokens are taken from contract address
+    function transfer(address recipient, uint256 amount) public override returns (bool) {
+        require(recipient != address(0), "ERC20: transfer to the zero address");
+        require(amount <= balanceOf(address(this)), "ERC20: transfer amount exceeds contract balance");
+
+        _transfer(address(this), recipient, amount);
+        return true;
+    }
+}
